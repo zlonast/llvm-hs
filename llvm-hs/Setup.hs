@@ -9,10 +9,19 @@ import Distribution.PackageDescription hiding (buildInfo, includeDirs)
 import Distribution.Simple
 import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.PreProcess
+#ifdef MIN_VERSION_Cabal
+#if MIN_VERSION_Cabal(3,12,0)
+import Distribution.Simple.PreProcess.Types (Suffix)
+#endif
+#endif
 import Distribution.Simple.Program
 import Distribution.Simple.Setup hiding (Flag)
 import Distribution.System
 import System.Environment
+
+#if MIN_VERSION_Cabal(3,14,0)
+import Distribution.Utils.Path
+#endif
 
 #ifdef MIN_VERSION_Cabal
 #if MIN_VERSION_Cabal(2,0,0)
@@ -20,6 +29,9 @@ import System.Environment
 #endif
 #if MIN_VERSION_Cabal(3,8,1)
 #define MIN_VERSION_Cabal_3_8_1
+#endif
+#if MIN_VERSION_Cabal(3,12,0)
+#define MIN_VERSION_Cabal_3_12_0
 #endif
 #endif
 
@@ -156,8 +168,13 @@ main = do
               }
            }
           configFlags' = confFlags {
+#if MIN_VERSION_Cabal(3,14,0)
+            configExtraLibDirs = fmap makeSymbolicPath libDirs ++ configExtraLibDirs confFlags,
+            configExtraIncludeDirs = fmap makeSymbolicPath includeDirs ++ configExtraIncludeDirs confFlags
+#else
             configExtraLibDirs = libDirs ++ configExtraLibDirs confFlags,
             configExtraIncludeDirs = includeDirs ++ configExtraIncludeDirs confFlags
+#endif
            }
       addLLVMToLdLibraryPath configFlags'
       confHook simpleUserHooks (genericPackageDescription', hookedBuildInfo) configFlags',
@@ -185,14 +202,21 @@ main = do
               where origHsc buildInfo' =
                       fromMaybe
                         ppHsc2hs
+#ifdef MIN_VERSION_Cabal_3_12_0
+                        (lookup (Suffix "hsc") origHookedPreprocessors)
+#else
                         (lookup "hsc" origHookedPreprocessors)
+#endif
                         buildInfo'
                         localBuildInfo
 #ifdef MIN_VERSION_Cabal_2_0_0
                         componentLocalBuildInfo
 #endif
+#ifdef MIN_VERSION_Cabal_3_12_0
+      in [(Suffix "hsc", newHsc)] ++ origHookedPreprocessors,
+#else
       in [("hsc", newHsc)] ++ origHookedPreprocessors,
-
+#endif
     buildHook = \packageDesc localBuildInfo userHooks buildFlags ->
       do addLLVMToLdLibraryPath (configFlags localBuildInfo)
          buildHook origUserHooks packageDesc localBuildInfo userHooks buildFlags,
